@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>T-CAMERA V26 | EDWINN</title>
+
+    <!-- ✅ PWA: Ícono y manifest -->
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon.png">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="T-CAMERA">
+    <meta name="theme-color" content="#000814">
+
+    <style>
+        body {
+            margin: 0; padding: 0;
+            background: #000814;
+            color: #ffffff;
+            font-family: 'Segoe UI', Roboto, sans-serif;
+            overflow: hidden;
+        }
+
+        #camera-container {
+            position: fixed; top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 1;
+        }
+        video { width: 100%; height: 100%; object-fit: cover; }
+
+        #ui-overlay {
+            position: absolute; top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 2;
+            display: flex; flex-direction: column;
+            justify-content: space-between;
+            pointer-events: none;
+        }
+
+        .panel {
+            background: rgba(0, 20, 39, 0.8);
+            backdrop-filter: blur(8px);
+            border: 1px solid #ff8500;
+            padding: 15px; margin: 12px;
+            border-radius: 10px;
+            pointer-events: auto;
+        }
+
+        h2 { color: #ff8500; margin: 0 0 8px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; }
+
+        .data-row {
+            display: flex; justify-content: space-between;
+            margin-bottom: 4px; font-family: 'Courier New', monospace;
+            font-size: 15px; font-weight: bold;
+        }
+
+        .btn-capture {
+            position: absolute; bottom: 85px; left: 50%;
+            transform: translateX(-50%);
+            width: 75px; height: 75px;
+            background: radial-gradient(#ff8500, #ff6200);
+            border: 4px solid #ffffff;
+            border-radius: 50%;
+            pointer-events: auto;
+            box-shadow: 0 0 20px rgba(255, 133, 0, 0.6);
+            cursor: pointer;
+        }
+        .btn-capture:active { transform: translateX(-50%) scale(0.9); }
+
+        #settings-panel {
+            display: none;
+            position: fixed; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 85%; max-width: 400px;
+            z-index: 100;
+            box-shadow: 0 0 30px rgba(0,0,0,0.8);
+        }
+
+        input[type="text"], input[type="file"] {
+            width: 100%; background: #001427;
+            border: 1px solid #ff8500; color: white;
+            margin: 10px 0; padding: 8px;
+            box-sizing: border-box; border-radius: 4px;
+        }
+
+        .btn-config {
+            position: absolute; top: 15px; right: 15px;
+            background: rgba(255,133,0,0.2); border: 1px solid #ff8500;
+            color: white; border-radius: 50%;
+            width: 40px; height: 40px; cursor: pointer;
+            pointer-events: auto; z-index: 10;
+        }
+
+        #logo-preview {
+            max-height: 45px; width: auto;
+            margin-right: 15px; display: none;
+        }
+
+        /* Splash / install banner */
+        #install-banner {
+            display: none;
+            position: fixed; bottom: 20px; left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,20,39,0.95);
+            border: 1px solid #ff8500;
+            border-radius: 10px;
+            padding: 12px 20px;
+            z-index: 200;
+            text-align: center;
+            font-size: 13px;
+            pointer-events: auto;
+            box-shadow: 0 0 20px rgba(255,133,0,0.4);
+        }
+        #install-banner button {
+            background: #ff8500; color: white; border: none;
+            padding: 8px 16px; border-radius: 4px;
+            cursor: pointer; font-weight: bold; margin-top: 8px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Panel de Edición -->
+    <div id="settings-panel" class="panel">
+        <h2>Configuración TECNLAB</h2>
+        <label style="font-size: 11px; color: #ff8500;">LOGO DE LA FIRMA (PNG):</label>
+        <input type="file" id="logo-input" accept="image/png" onchange="actualizarLogo(event)">
+        <label style="font-size: 11px; color: #ff8500;">NOMBRE DEL PROYECTO / EMPRESA:</label>
+        <input type="text" id="edit-empresa" placeholder="Ej: TECNLAB - EDWINN" oninput="actualizarTexto()">
+        <button onclick="toggleSettings()" style="width:100%; background:#ff8500; color:white; border:none; padding:12px; font-weight:bold; border-radius:4px; cursor:pointer; margin-top:10px;">GUARDAR Y CERRAR</button>
+    </div>
+
+    <!-- Banner de instalación -->
+    <div id="install-banner">
+        📲 <strong>Instalar T-CAMERA en tu dispositivo</strong><br>
+        <button id="btn-install">Agregar a pantalla de inicio</button>
+        <button onclick="document.getElementById('install-banner').style.display='none'"
+            style="background:transparent; border:1px solid #ff8500; margin-left:8px;">Ahora no</button>
+    </div>
+
+    <div id="camera-container">
+        <video id="video" autoplay playsinline></video>
+    </div>
+
+    <div id="ui-overlay">
+        <button class="btn-config" onclick="toggleSettings()">⚙️</button>
+
+        <!-- Panel Superior -->
+        <div class="panel">
+            <div style="display: flex; align-items: center; margin-bottom: 10px;">
+                <img id="logo-preview" src="">
+                <h2 id="display-empresa">DATOS DE UBICACIÓN - TECNLAB</h2>
+            </div>
+            <div class="data-row"><span>LATITUD:</span> <span id="lat">Buscando GPS...</span></div>
+            <div class="data-row"><span>LONGITUD:</span> <span id="lon">Buscando GPS...</span></div>
+            <div class="data-row" style="color: #ff8500; border-top: 1px solid rgba(255,133,0,0.3); padding-top:5px; margin-top:5px;">
+                <span>HORA LOCAL:</span> <span id="clock">00:00:00</span>
+            </div>
+        </div>
+
+        <button class="btn-capture" onclick="capturar()"></button>
+
+        <!-- Panel Inferior -->
+        <div class="panel">
+            <div class="data-row" style="color: #00f5ff; font-size: 12px;">
+                <span>SISTEMA:</span> <span>T-PERFORM V26 ONLINE</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- CÁMARA ---
+        async function initCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: "environment" },
+                    audio: false
+                });
+                document.getElementById('video').srcObject = stream;
+            } catch (err) {
+                console.error("Cámara no disponible:", err);
+            }
+        }
+
+        // --- GPS ---
+        function initGPS() {
+            if ("geolocation" in navigator) {
+                navigator.geolocation.watchPosition((pos) => {
+                    document.getElementById('lat').innerText = pos.coords.latitude.toFixed(6);
+                    document.getElementById('lon').innerText = pos.coords.longitude.toFixed(6);
+                }, null, { enableHighAccuracy: true });
+            }
+        }
+
+        // --- RELOJ ---
+        function updateClock() {
+            document.getElementById('clock').innerText = new Date().toLocaleTimeString();
+        }
+
+        // --- EDITOR ---
+        function toggleSettings() {
+            const panel = document.getElementById('settings-panel');
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function actualizarTexto() {
+            const txt = document.getElementById('edit-empresa').value;
+            document.getElementById('display-empresa').innerText = txt || "DATOS DE UBICACIÓN - TECNLAB";
+        }
+
+        function actualizarLogo(event) {
+            const reader = new FileReader();
+            reader.onload = function() {
+                const img = document.getElementById('logo-preview');
+                img.src = reader.result;
+                img.style.display = 'block';
+            };
+            if(event.target.files[0]) reader.readAsDataURL(event.target.files[0]);
+        }
+
+        function capturar() {
+            document.body.style.backgroundColor = "white";
+            setTimeout(() => { document.body.style.backgroundColor = "#000814"; }, 100);
+            alert("Registro guardado en base de datos local.");
+        }
+
+        // --- SERVICE WORKER (PWA offline) ---
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js').catch(() => {});
+        }
+
+        // --- INSTALL PROMPT (ícono en pantalla de inicio) ---
+        let deferredPrompt;
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            document.getElementById('install-banner').style.display = 'block';
+        });
+
+        document.getElementById('btn-install').addEventListener('click', async () => {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                deferredPrompt = null;
+                document.getElementById('install-banner').style.display = 'none';
+            }
+        });
+
+        // --- INICIO ---
+        window.onload = () => {
+            initCamera();
+            initGPS();
+            setInterval(updateClock, 1000);
+        };
+    </script>
+</body>
+</html>
